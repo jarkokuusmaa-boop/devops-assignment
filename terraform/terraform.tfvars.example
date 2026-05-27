@@ -1,0 +1,19 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# Do NOT commit terraform.tfvars to version control (it's in .gitignore).
+
+proxmox_api_url          = "https://192.168.1.10:8006/api2/json"
+proxmox_api_token        = "terraform@pam!terraform-token=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+proxmox_tls_insecure     = true
+proxmox_node             = "pve"
+proxmox_vm_storage       = "local-lvm"
+proxmox_snippets_storage = "local"
+proxmox_bridge           = "vmbr0"
+ubuntu_template_vmid     = 9000
+ssh_public_key_path      = "~/.ssh/id_ed25519.pub"
+
+web01_ip     = "192.168.100.11"
+db01_ip      = "192.168.100.12"
+monitor01_ip = "192.168.100.13"
+gateway      = "192.168.100.1"
+prefix_length = 24
+dns_servers   = ["1.1.1.1", "8.8.8.8"]

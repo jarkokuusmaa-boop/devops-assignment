@@ -1,0 +1,49 @@
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: internalboard-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       {{ db_name }}
+      POSTGRES_USER:     {{ db_user }}
+      POSTGRES_PASSWORD: {{ db_password }}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ db_user }} -d {{ db_name }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: internalboard-web
+    restart: unless-stopped
+    ports:
+      - "{{ app_port }}:5000"
+    environment:
+      DB_HOST:     db
+      DB_PORT:     5432
+      DB_NAME:     {{ db_name }}
+      DB_USER:     {{ db_user }}
+      DB_PASSWORD: {{ db_password }}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - appnet
+
+volumes:
+  pgdata:
+    name: internalboard-pgdata
+
+networks:
+  appnet:
+    name: internalboard-net
+    driver: bridge

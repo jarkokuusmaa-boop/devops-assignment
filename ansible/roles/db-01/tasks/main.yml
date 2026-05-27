@@ -1,0 +1,122 @@
+---
+# ansible/roles/db-01/tasks/main.yml
+
+# ── 1. System prerequisites ────────────────────────────────────────────────
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install prerequisite packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - python3-pip
+      - ufw
+      - acl          # needed for become_user with postgres
+    state: present
+
+- name: Install Python PostgreSQL library (for Ansible modules)
+  ansible.builtin.pip:
+    name: psycopg2-binary
+    state: present
+
+# ── 2. Install PostgreSQL ──────────────────────────────────────────────────
+- name: Add PostgreSQL APT signing key
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /etc/apt/keyrings/pgdg.asc
+    mode: "0644"
+
+- name: Add PostgreSQL APT repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/etc/apt/keyrings/pgdg.asc]
+      https://apt.postgresql.org/pub/repos/apt
+      {{ ansible_distribution_release }}-pgdg main
+    filename: pgdg
+    state: present
+
+- name: Install PostgreSQL 16
+  ansible.builtin.apt:
+    name:
+      - postgresql-16
+      - postgresql-client-16
+    state: present
+    update_cache: true
+
+- name: Ensure PostgreSQL service is enabled and started
+  ansible.builtin.service:
+    name: postgresql
+    enabled: true
+    state: started
+
+# ── 3. Configure PostgreSQL to accept remote connections ──────────────────
+- name: Set listen_addresses to '*'
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql/16/main/postgresql.conf
+    regexp: "^#?listen_addresses"
+    line: "listen_addresses = '*'"
+  notify: restart postgresql
+
+- name: Allow app subnet in pg_hba.conf (md5 auth)
+  ansible.builtin.blockinfile:
+    path: /etc/postgresql/16/main/pg_hba.conf
+    marker: "# {mark} ANSIBLE MANAGED — internalboard"
+    block: |
+      # Allow the application subnet to connect with password
+      host  {{ db_name }}  {{ db_user }}  192.168.100.0/24  md5
+  notify: restart postgresql
+
+# ── 4. Create DB user and database ────────────────────────────────────────
+- name: Create application database user
+  become_user: postgres
+  community.postgresql.postgresql_user:
+    name: "{{ db_user }}"
+    password: "{{ db_password }}"
+    state: present
+
+- name: Create application database
+  become_user: postgres
+  community.postgresql.postgresql_db:
+    name: "{{ db_name }}"
+    owner: "{{ db_user }}"
+    state: present
+
+- name: Grant all privileges on database to app user
+  become_user: postgres
+  community.postgresql.postgresql_privs:
+    database: "{{ db_name }}"
+    role: "{{ db_user }}"
+    type: database
+    privs: ALL
+    state: present
+
+# ── 5. Firewall ────────────────────────────────────────────────────────────
+- name: Allow SSH through UFW
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: Allow PostgreSQL only from web-01
+  community.general.ufw:
+    rule: allow
+    port: "{{ db_port }}"
+    proto: tcp
+    src: 192.168.100.11
+
+- name: Enable UFW (default deny)
+  community.general.ufw:
+    state: enabled
+    policy: deny
+
+# ── Handlers ──────────────────────────────────────────────────────────────
+handlers:
+  - name: restart postgresql
+    ansible.builtin.service:
+      name: postgresql
+      state: restarted

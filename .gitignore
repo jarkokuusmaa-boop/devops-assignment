@@ -1,0 +1,29 @@
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/crash.log
+
+# Ansible secrets
+ansible/group_vars/all/vault.yml
+ansible/*.retry
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Docker
+studentapp/.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp

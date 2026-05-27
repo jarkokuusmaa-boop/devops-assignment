@@ -1,0 +1,40 @@
+version: '3.9'
+
+services:
+
+  web:
+    build: .
+    container_name: studentapp-web
+
+    ports:
+      - "5000:5000"
+
+    environment:
+      DB_HOST: db
+      DB_NAME: studentapp
+      DB_USER: studentadmin
+      DB_PASS: studentpass
+
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16
+
+    container_name: studentapp-db
+
+    restart: always
+
+    environment:
+      POSTGRES_DB: studentapp
+      POSTGRES_USER: studentadmin
+      POSTGRES_PASSWORD: studentpass
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

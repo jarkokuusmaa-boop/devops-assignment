@@ -1,0 +1,176 @@
+---
+# ansible/roles/web-01/tasks/main.yml
+
+# ── 1. System prerequisites ────────────────────────────────────────────────
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install prerequisite packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - python3-pip
+      - git
+      - ufw
+    state: present
+
+# ── 2. Install Docker Engine ───────────────────────────────────────────────
+- name: Create keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Add Docker apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ ansible_architecture | replace('x86_64','amd64') }}
+      signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu
+      {{ ansible_distribution_release }} stable
+    filename: docker
+    state: present
+
+- name: Install Docker packages
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+
+- name: Enable and start Docker service
+  ansible.builtin.service:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Add ubuntu user to docker group
+  ansible.builtin.user:
+    name: ubuntu
+    groups: docker
+    append: true
+
+# ── 3. Deploy application files ────────────────────────────────────────────
+- name: Create application directory
+  ansible.builtin.file:
+    path: "{{ app_dir }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Copy application source files
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ app_dir }}/"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+  loop:
+    - app.py
+    - requirements.txt
+    - Dockerfile
+    - .dockerignore
+
+- name: Copy docker-compose file (with env substitution)
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ app_dir }}/docker-compose.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+
+- name: Create templates directory
+  ansible.builtin.file:
+    path: "{{ app_dir }}/templates"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Copy HTML templates
+  ansible.builtin.copy:
+    src: templates/index.html
+    dest: "{{ app_dir }}/templates/index.html"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+
+# ── 4. Write .env file ─────────────────────────────────────────────────────
+- name: Write .env file
+  ansible.builtin.copy:
+    dest: "{{ app_dir }}/.env"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+    content: |
+      DB_HOST={{ db_host }}
+      DB_PORT={{ db_port }}
+      DB_NAME={{ db_name }}
+      DB_USER={{ db_user }}
+      DB_PASSWORD={{ db_password }}
+      WEB_PORT={{ app_port }}
+
+# ── 5. Build and start containers ─────────────────────────────────────────
+- name: Build Docker images
+  ansible.builtin.command:
+    cmd: docker compose build --no-cache
+    chdir: "{{ app_dir }}"
+  become_user: ubuntu
+  register: docker_build
+  changed_when: docker_build.rc == 0
+
+- name: Start containers (detached)
+  ansible.builtin.command:
+    cmd: docker compose up -d
+    chdir: "{{ app_dir }}"
+  become_user: ubuntu
+  register: docker_up
+  changed_when: "'Started' in docker_up.stdout or 'Created' in docker_up.stdout"
+
+# ── 6. Firewall ────────────────────────────────────────────────────────────
+- name: Allow SSH through UFW
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: Allow Flask port through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ app_port }}"
+    proto: tcp
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+    policy: deny
+
+# ── 7. Smoke test ──────────────────────────────────────────────────────────
+- name: Wait for Flask to respond
+  ansible.builtin.uri:
+    url: "http://localhost:{{ app_port }}/healthz"
+    status_code: 200
+  register: healthcheck
+  until: healthcheck.status == 200
+  retries: 12
+  delay: 5
+
+- name: Print health check result
+  ansible.builtin.debug:
+    msg: "Flask is up — status {{ healthcheck.status }}"

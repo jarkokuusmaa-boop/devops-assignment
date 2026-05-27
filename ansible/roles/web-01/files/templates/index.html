@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Student DevOps Application</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            margin: 40px;
+            background: #f4f4f4;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        button {
+            margin-top: 10px;
+            padding: 10px 20px;
+        }
+
+        .message {
+            background: #eeeeee;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>Student DevOps Application</h1>
+
+    <p>
+        This application was deployed using:
+    </p>
+
+    <ul>
+        <li>Terraform</li>
+        <li>Ansible</li>
+        <li>Docker</li>
+        <li>Proxmox</li>
+    </ul>
+
+    <h2>Leave a Message</h2>
+
+    <form method="POST">
+
+        <input
+            type="text"
+            name="username"
+            placeholder="Your Name"
+            required
+        >
+
+        <textarea
+            name="message"
+            placeholder="Your Message"
+            required
+        ></textarea>
+
+        <button type="submit">
+            Submit
+        </button>
+
+    </form>
+
+    <h2>Messages</h2>
+
+    {% for username, message in messages %}
+        <div class="message">
+            <strong>{{ username }}</strong><br>
+            {{ message }}
+        </div>
+    {% endfor %}
+
+</div>
+
+</body>
+</html>

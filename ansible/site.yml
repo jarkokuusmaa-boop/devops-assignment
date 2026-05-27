@@ -1,0 +1,22 @@
+---
+# ansible/site.yml
+# Master playbook — run with:
+#   ansible-playbook -i inventory.ini site.yml
+
+- name: Configure web-01 (Flask + Docker)
+  hosts: web
+  become: true
+  roles:
+    - web-01
+
+- name: Configure db-01 (PostgreSQL)
+  hosts: db
+  become: true
+  roles:
+    - db-01
+
+- name: Configure monitor-01 (Monitoring)
+  hosts: monitoring
+  become: true
+  roles:
+    - monitor-01
